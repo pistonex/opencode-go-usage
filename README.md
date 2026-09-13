@@ -36,7 +36,7 @@ Add the package to `plugins` in your global `~/.config/opencode/opencode.json(c)
 
 ```jsonc
 {
-  "plugins": ["opencode-go-usage"]
+  "plugins": ["@pistonex/opencode-go-usage"]
 }
 ```
 
@@ -45,7 +45,7 @@ instead:
 
 ```jsonc
 {
-  "plugins": ["opencode-go-usage"]
+  "plugins": ["@pistonex/opencode-go-usage"]
 }
 ```
 
@@ -77,7 +77,7 @@ Override it at any time with the slash command:
 
 ```jsonc
 {
-  "plugins": [{ "package": "opencode-go-usage", "options": { "language": "en" } }]
+  "plugins": [{ "package": "@pistonex/opencode-go-usage", "options": { "language": "en" } }]
 }
 ```
 

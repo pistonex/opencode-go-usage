@@ -1,5 +1,5 @@
 {
-  "name": "opencode-go-usage",
+  "name": "@pistonex/opencode-go-usage",
   "version": "0.1.0",
   "description": "OpenCode TUI plugin that shows OpenCode Go subscription usage (rolling / weekly / monthly) in the sidebar",
   "type": "module",
@@ -15,6 +15,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pistonex/opencode-go-usage.git"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": [
     "src",
