@@ -115,9 +115,11 @@ function setLangPersist(l: Language): void {
   persistLang(l)
 }
 
-function useStrings(): Strings {
+// Devuelve un accessor reactivo a los textos: el widget se actualiza en
+// caliente cuando cambia el idioma (señal persistida por el comando slash).
+function useStrings(): () => Strings {
   const ctx = usePlugin()
-  return STRINGS[langFromOptions(ctx.options) ?? lang()]
+  return createMemo(() => STRINGS[langFromOptions(ctx.options) ?? lang()])
 }
 
 type UsageItem = {
@@ -223,12 +225,12 @@ const ROWS: Array<(usage: Usage) => Row> = [
 // El fetcher usa el estado de colapso como fuente del recurso: mientras el
 // widget está colapsado no se hace ninguna petición y al expandirlo se
 // refresca de inmediato (cambio de fuente).
-function useUsage(t: Strings, collapsed: { value: boolean }): Resource<UsageResult> {
+function useUsage(t: () => Strings, collapsed: { value: boolean }): Resource<UsageResult> {
   const [usage, { refetch }] = createResource<UsageResult, string>(
     () => (collapsed.value ? "collapsed" : "visible"),
     async (state) => {
       if (state === "collapsed") return { ok: false, error: "" }
-      return fetchUsage(t)
+      return fetchUsage(t())
     },
   )
   const timer = setInterval(() => {
@@ -271,7 +273,7 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
           <b>⬖ OpenCode Go</b>
         </text>
         <text fg={theme().text.subdued}>
-          {t.subscription} {props.collapsed.value ? "▸" : "▾"}
+          {t().subscription} {props.collapsed.value ? "▸" : "▾"}
         </text>
       </box>
 
@@ -281,10 +283,10 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
           fallback={
             <box flexDirection="column" gap={1}>
               <text fg={theme().text.subdued}>
-                <span style={{ fg: theme().text.feedback.warning.default }}>⬖</span> {t.unavailable}
+                <span style={{ fg: theme().text.feedback.warning.default }}>⬖</span> {t().unavailable}
               </text>
               <Show when={loading()}>
-                <text fg={theme().text.subdued}>{t.loading}</text>
+                <text fg={theme().text.subdued}>{t().loading}</text>
               </Show>
               <Show when={errorText()} keyed>
                 {(message: string) => <text fg={theme().text.feedback.error.default}>{message}</text>}
@@ -304,7 +306,7 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
                 return (
                   <box flexDirection="row" gap={1}>
                     <text flexShrink={0} width={9} fg={theme().text.subdued}>
-                      {t[row.labelKey]}
+                      {t()[row.labelKey]}
                     </text>
                     <text flexShrink={0} fg={color}>
                       {bar(p)}
@@ -325,7 +327,7 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
           </Show>
 
           <Show when={rows().length === 0 && usage()?.ok}>
-            <text fg={theme().text.subdued}>{t.noData}</text>
+            <text fg={theme().text.subdued}>{t().noData}</text>
           </Show>
         </Show>
       </Show>

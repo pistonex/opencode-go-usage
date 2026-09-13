@@ -4,7 +4,7 @@
   "description": "OpenCode TUI plugin that shows OpenCode Go subscription usage (rolling / weekly / monthly) in the sidebar",
   "type": "module",
   "license": "MIT",
-  "author": "Tony Pistone",
+  "author": "Tony Pistone <admin@pistone.com.ar>",
   "keywords": [
     "opencode",
     "opencode-plugin",
@@ -14,7 +14,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tonypistone/opencode-go-usage.git"
+    "url": "git+https://github.com/pistonex/opencode-go-usage.git"
   },
   "files": [
     "src",
