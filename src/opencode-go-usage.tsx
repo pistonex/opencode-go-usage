@@ -173,17 +173,23 @@ async function fetchUsage(t: Strings): Promise<UsageResult> {
   if (!key) {
     return { ok: false, error: t.noKey }
   }
+  // Timeout con AbortController manual: AbortSignal.timeout() no aborta el
+  // fetch en el runtime Bun de la TUI (señal estática no observada).
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   let res: Response
   try {
     res = await fetch(USAGE_URL, {
       headers: { authorization: `Bearer ${key}` },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: controller.signal,
     })
   } catch (err) {
-    if (err instanceof Error && err.name === "TimeoutError") {
+    if (err instanceof Error && err.name === "AbortError") {
       return { ok: false, error: t.timeout }
     }
     return { ok: false, error: t.offline }
+  } finally {
+    clearTimeout(timer)
   }
   const json = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
   if (!res.ok) {
