@@ -25,6 +25,7 @@
     "LICENSE"
   ],
   "exports": {
+    ".": "./src/index.ts",
     "./tui": "./src/opencode-go-usage.tsx"
   },
   "scripts": {
