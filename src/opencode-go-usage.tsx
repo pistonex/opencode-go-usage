@@ -1,9 +1,25 @@
-/** @jsxImportSource @opentui/solid */
-import { createMemo, createResource, createSignal, onCleanup, Show, type Resource } from "solid-js"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { Plugin, usePlugin } from "@opencode/plugin/tui"
+import type { Resource } from "solid-js"
+
+// ---- Módulos del HOST vía ids virtuales ----
+// Instalado como paquete npm, este archivo vive dentro de un node_modules, y
+// Bun resuelve los bare specifiers contra las copias locales del paquete en
+// vez de contra el host. Eso duplicaría el runtime de Solid (el host renderiza
+// con una instancia y este plugin reaccionaría con otra) y la UI quedaría
+// congelada en el render inicial. Los ids virtuales opentui:runtime-module:*
+// son módulos registrados por la TUI y resuelven a SUS instancias desde
+// cualquier ubicación. Ver src/virtual-modules.d.ts para los tipos.
+import { createMemo, createResource, createSignal, onCleanup, Show } from "opentui:runtime-module:solid-js"
+import { Plugin, usePlugin } from "opentui:runtime-module:%40opencode%2Fplugin%2Ftui"
+import { jsx, jsxs } from "opentui:runtime-module:%40opentui%2Fsolid%2Fjsx-runtime"
+
+// El jsx-runtime del host tipa los componentes como (props: Record<string,
+// unknown>) => unknown; el Show de Solid es un componente genérico más
+// estricto. Mismo valor en runtime, firma compatible para el typecheck.
+type AnyComponent = (props: Record<string, unknown>) => unknown
+const show = Show as unknown as AnyComponent
 
 const USAGE_URL = "https://opencode.ai/zen/go/v1/usage"
 const REFRESH_MS = 5 * 60 * 1000
@@ -115,8 +131,6 @@ function setLangPersist(l: Language): void {
   persistLang(l)
 }
 
-// Devuelve un accessor reactivo a los textos: el widget se actualiza en
-// caliente cuando cambia el idioma (señal persistida por el comando slash).
 function useStrings(): () => Strings {
   const ctx = usePlugin()
   return createMemo(() => STRINGS[langFromOptions(ctx.options) ?? lang()])
@@ -228,14 +242,14 @@ const ROWS: Array<(usage: Usage) => Row> = [
   (u) => ({ labelKey: "monthly", item: u.monthly }),
 ]
 
-// El fetcher usa el estado de colapso como fuente del recurso: mientras el
-// widget está colapsado no se hace ninguna petición y al expandirlo se
-// refresca de inmediato (cambio de fuente).
+// El estado de colapso es la fuente del recurso: mientras el widget está
+// colapsado no se hace ninguna petición y al expandirlo se refresca de
+// inmediato (cambio de fuente).
 function useUsage(t: () => Strings, collapsed: { value: boolean }): Resource<UsageResult> {
-  const [usage, { refetch }] = createResource<UsageResult, string>(
+  const [usage, { refetch }] = createResource(
     () => (collapsed.value ? "collapsed" : "visible"),
-    async (state) => {
-      if (state === "collapsed") return { ok: false, error: "" }
+    async (state: string) => {
+      if (state === "collapsed") return { ok: false as const, error: "" }
       return fetchUsage(t())
     },
   )
@@ -246,6 +260,11 @@ function useUsage(t: () => Strings, collapsed: { value: boolean }): Resource<Usa
   return usage
 }
 
+// El markup se construye con jsx()/jsxs() manuales y getters por expresión
+// dinámica (la forma exacta en que el compilador de Solid genera el JSX).
+// No se usa sintaxis JSX porque el import automático del jsx-runtime sería un
+// bare specifier que, dentro de node_modules, resolvería contra una copia
+// local en vez del host (ver nota de imports virtuales arriba).
 function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) {
   const context = usePlugin()
   const theme = () => context.theme
@@ -262,83 +281,178 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
     return value !== undefined && !value.ok && value.error ? value.error : undefined
   })
 
-  return (
-    <box
-      flexDirection="column"
-      gap={1}
-      backgroundColor={theme().background.surface.overlay}
-      border
-      borderColor={theme().border.default}
-      paddingTop={1}
-      paddingBottom={1}
-      paddingLeft={2}
-      paddingRight={2}
-    >
-      <box flexDirection="row" gap={1} justifyContent="space-between">
-        <text fg={theme().text.default}>
-          <b>⬖ OpenCode Go</b>
-        </text>
-        <text fg={theme().text.subdued}>
-          {t().subscription} {props.collapsed.value ? "▸" : "▾"}
-        </text>
-      </box>
-
-      <Show when={!props.collapsed.value}>
-        <Show
-          when={usage()?.ok}
-          fallback={
-            <box flexDirection="column" gap={1}>
-              <text fg={theme().text.subdued}>
-                <span style={{ fg: theme().text.feedback.warning.default }}>⬖</span> {t().unavailable}
-              </text>
-              <Show when={loading()}>
-                <text fg={theme().text.subdued}>{t().loading}</text>
-              </Show>
-              <Show when={errorText()} keyed>
-                {(message: string) => <text fg={theme().text.feedback.error.default}>{message}</text>}
-              </Show>
-            </box>
-          }
-        >
-          <Show when={rows().length > 0}>
-            <box flexDirection="column" gap={1}>
-              {rows().map((row) => {
-                const p = row.item.percent
-                const color =
-                  row.item.status === "rate-limited"
-                    ? theme().text.feedback.error.default
-                    : theme().text.feedback.success.default
-                const label = Number.isInteger(p) ? String(p) : String(p.toFixed(1))
-                return (
-                  <box flexDirection="row" gap={1}>
-                    <text flexShrink={0} width={9} fg={theme().text.subdued}>
-                      {t()[row.labelKey]}
-                    </text>
-                    <text flexShrink={0} fg={color}>
-                      {bar(p)}
-                    </text>
-                    <text flexShrink={0} fg={color}>
-                      {label}%
-                    </text>
-                    <text flexShrink={0} fg={color}>
-                      {statusGlyph(row.item.status)}
-                    </text>
-                    <text flexShrink={0} fg={theme().text.subdued}>
-                      ↻ {resetIn(row.item.resetsAt)}
-                    </text>
-                  </box>
-                )
-              })}
-            </box>
-          </Show>
-
-          <Show when={rows().length === 0 && usage()?.ok}>
-            <text fg={theme().text.subdued}>{t().noData}</text>
-          </Show>
-        </Show>
-      </Show>
-    </box>
-  )
+  return jsxs("box", {
+    flexDirection: "column",
+    gap: 1,
+    get backgroundColor() {
+      return theme().background.surface.overlay
+    },
+    border: true,
+    get borderColor() {
+      return theme().border.default
+    },
+    paddingTop: 1,
+    paddingBottom: 1,
+    paddingLeft: 2,
+    paddingRight: 2,
+    children: [
+      jsxs("box", {
+        flexDirection: "row",
+        gap: 1,
+        justifyContent: "space-between",
+        children: [
+          jsx("text", {
+            get fg() {
+              return theme().text.default
+            },
+            children: jsx("b", { children: "⬖ OpenCode Go" }),
+          }),
+          jsx("text", {
+            get fg() {
+              return theme().text.subdued
+            },
+            get children() {
+              return `${t().subscription} ${props.collapsed.value ? "▸" : "▾"}`
+            },
+          }),
+        ],
+      }),
+      jsx(show, {
+        get when() {
+          return !props.collapsed.value
+        },
+        children: jsxs(show, {
+          get when() {
+            return usage()?.ok
+          },
+          fallback: jsxs("box", {
+            flexDirection: "column",
+            gap: 1,
+            children: [
+              jsxs("text", {
+                get fg() {
+                  return theme().text.subdued
+                },
+                get children() {
+                  return [
+                    jsx("span", {
+                      get style() {
+                        return { fg: theme().text.feedback.warning.default }
+                      },
+                      children: "⬖",
+                    }),
+                    ` ${t().unavailable}`,
+                  ]
+                },
+              }),
+              jsx(show, {
+                get when() {
+                  return loading()
+                },
+                children: jsx("text", {
+                  get fg() {
+                    return theme().text.subdued
+                  },
+                  get children() {
+                    return t().loading
+                  },
+                }),
+              }),
+              jsx(show, {
+                get when() {
+                  return errorText()
+                },
+                keyed: true,
+                children: (message: string) =>
+                  jsx("text", {
+                    get fg() {
+                      return theme().text.feedback.error.default
+                    },
+                    children: message,
+                  }),
+              }),
+            ],
+          }),
+          children: [
+            jsx(show, {
+              get when() {
+                return rows().length > 0
+              },
+              children: jsxs("box", {
+                flexDirection: "column",
+                gap: 1,
+                get children() {
+                  return rows().map((row) => {
+                    const p = row.item.percent
+                    const color =
+                      row.item.status === "rate-limited"
+                        ? theme().text.feedback.error.default
+                        : theme().text.feedback.success.default
+                    const label = Number.isInteger(p) ? String(p) : String(p.toFixed(1))
+                    return jsxs("box", {
+                      flexDirection: "row",
+                      gap: 1,
+                      children: [
+                        jsx("text", {
+                          flexShrink: 0,
+                          width: 9,
+                          get fg() {
+                            return theme().text.subdued
+                          },
+                          children: t()[row.labelKey],
+                        }),
+                        jsx("text", {
+                          flexShrink: 0,
+                          get fg() {
+                            return color
+                          },
+                          children: bar(p),
+                        }),
+                        jsx("text", {
+                          flexShrink: 0,
+                          get fg() {
+                            return color
+                          },
+                          children: `${label}%`,
+                        }),
+                        jsx("text", {
+                          flexShrink: 0,
+                          get fg() {
+                            return color
+                          },
+                          children: statusGlyph(row.item.status),
+                        }),
+                        jsx("text", {
+                          flexShrink: 0,
+                          get fg() {
+                            return theme().text.subdued
+                          },
+                          children: `↻ ${resetIn(row.item.resetsAt)}`,
+                        }),
+                      ],
+                    })
+                  })
+                },
+              }),
+            }),
+            jsx(show, {
+              get when() {
+                return rows().length === 0 && usage()?.ok
+              },
+              children: jsx("text", {
+                get fg() {
+                  return theme().text.subdued
+                },
+                get children() {
+                  return t().noData
+                },
+              }),
+            }),
+          ],
+        }),
+      }),
+    ],
+  })
 }
 
 export default Plugin.define({
@@ -363,7 +477,7 @@ export default Plugin.define({
     const unregs = [
       context.ui.slot({
         append: "sidebar.content",
-        render: ({ sessionID }) => <UsageView sessionID={sessionID} collapsed={collapsed} />,
+        render: ({ sessionID }) => UsageView({ sessionID, collapsed }),
       }),
       context.ui.slot({
         append: "app",
