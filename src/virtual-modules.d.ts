@@ -11,7 +11,7 @@
  * runtime de Solid y congelaría la UI.
  *
  * Estas declaraciones solo existen para el typecheck: reexportan los tipos de
- * los paquetes reales (devDependencies del repo).
+ * los paquetes reales (dependencies/devDependencies del repo).
  */
 declare module "opentui:runtime-module:solid-js" {
   export * from "solid-js"

@@ -1,6 +1,6 @@
 {
   "name": "@pistonex/opencode-go-usage",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "OpenCode TUI plugin that shows OpenCode Go subscription usage (rolling / weekly / monthly) in the sidebar",
   "type": "module",
   "license": "MIT",
@@ -32,7 +32,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@opencode/plugin": "^2.0.3"
+    "@opencode/plugin": "^2.0.11"
   },
   "devDependencies": {
     "@opentui/core": ">=0.5.8",

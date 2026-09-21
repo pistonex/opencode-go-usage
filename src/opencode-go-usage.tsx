@@ -285,11 +285,11 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
     flexDirection: "column",
     gap: 1,
     get backgroundColor() {
-      return theme().background.surface.overlay
+      return theme().background.raised.base
     },
     border: true,
     get borderColor() {
-      return theme().border.default
+      return theme().border.base
     },
     paddingTop: 1,
     paddingBottom: 1,
@@ -303,13 +303,13 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
         children: [
           jsx("text", {
             get fg() {
-              return theme().text.default
+              return theme().text.base
             },
             children: jsx("b", { children: "⬖ OpenCode Go" }),
           }),
           jsx("text", {
             get fg() {
-              return theme().text.subdued
+              return theme().text.muted
             },
             get children() {
               return `${t().subscription} ${props.collapsed.value ? "▸" : "▾"}`
@@ -331,13 +331,13 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
             children: [
               jsxs("text", {
                 get fg() {
-                  return theme().text.subdued
+                  return theme().text.muted
                 },
                 get children() {
                   return [
                     jsx("span", {
                       get style() {
-                        return { fg: theme().text.feedback.warning.default }
+                        return { fg: theme().text.feedback.warning.base }
                       },
                       children: "⬖",
                     }),
@@ -351,7 +351,7 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
                 },
                 children: jsx("text", {
                   get fg() {
-                    return theme().text.subdued
+                    return theme().text.muted
                   },
                   get children() {
                     return t().loading
@@ -386,8 +386,8 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
                     const p = row.item.percent
                     const color =
                       row.item.status === "rate-limited"
-                        ? theme().text.feedback.error.default
-                        : theme().text.feedback.success.default
+                        ? theme().text.feedback.error.base
+                        : theme().text.feedback.success.base
                     const label = Number.isInteger(p) ? String(p) : String(p.toFixed(1))
                     return jsxs("box", {
                       flexDirection: "row",
@@ -397,7 +397,7 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
                           flexShrink: 0,
                           width: 9,
                           get fg() {
-                            return theme().text.subdued
+                            return theme().text.muted
                           },
                           children: t()[row.labelKey],
                         }),
@@ -425,7 +425,7 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
                         jsx("text", {
                           flexShrink: 0,
                           get fg() {
-                            return theme().text.subdued
+                            return theme().text.muted
                           },
                           children: `↻ ${resetIn(row.item.resetsAt)}`,
                         }),
@@ -441,7 +441,7 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
               },
               children: jsx("text", {
                 get fg() {
-                  return theme().text.subdued
+                  return theme().text.muted
                 },
                 get children() {
                   return t().noData
