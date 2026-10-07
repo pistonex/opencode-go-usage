@@ -51,14 +51,18 @@ instead:
 
 Then restart OpenCode.
 
-Requires OpenCode v2 (CLI plugin API).
+Requires OpenCode v2.0.20+ (CLI plugin API with the credential endpoint).
 
 ## How it gets the API key
 
-The plugin reads `~/.local/share/opencode/account.json`, finds the account with
-`serviceID === "opencode-go"` and uses its `credential.key`. The key is only
-used in memory for the `Authorization: Bearer` request; it is never printed or
-written anywhere.
+In OpenCode v2 credentials live in the background service, not in
+`account.json`. The plugin asks the connected server for its stored
+credentials (`GET /api/credential` through `context.client.credential.list()`),
+finds the active `opencode-go` key and uses it in memory for the
+`Authorization: Bearer` request. The key is never printed or written anywhere.
+
+The lookup goes through the connected server, so it also works when the TUI is
+attached to a remote server.
 
 ## Language
 

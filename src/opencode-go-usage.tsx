@@ -150,25 +150,21 @@ type Usage = {
 
 type UsageResult = { ok: true; usage: Usage } | { ok: false; error: string }
 
-function accountFile(): string {
-  return path.join(os.homedir(), ".local", "share", "opencode", "account.json")
-}
+type PluginClient = ReturnType<typeof usePlugin>["client"]
 
-function readGoApiKey(): string | undefined {
+// En opencode v2 los credenciales ya no viven en account.json: los guarda el
+// servicio y se leen por la API (GET /api/credential) a través del cliente del
+// host. Así funciona también contra servidores remotos.
+async function readGoApiKey(client: PluginClient): Promise<string | undefined> {
   try {
-    const raw = JSON.parse(fs.readFileSync(accountFile(), "utf8")) as {
-      accounts?: Record<string, { serviceID?: string; credential?: { type?: string; key?: string } }>
-    }
-    for (const account of Object.values(raw.accounts ?? {})) {
-      if (
-        account?.serviceID === "opencode-go" &&
-        account?.credential?.type === "api" &&
-        typeof account.credential.key === "string"
-      ) {
-        return account.credential.key
-      }
-    }
+    const credentials = await client.credential.list()
+    const entry =
+      credentials.find(
+        (c) => c.integrationID === "opencode-go" && c.active && c.value.type === "key",
+      ) ?? credentials.find((c) => c.integrationID === "opencode-go" && c.value.type === "key")
+    if (entry?.value.type === "key") return entry.value.key
   } catch {
+    // servicio caído o versión sin /api/credential: se trata como sin key
   }
   return undefined
 }
@@ -182,8 +178,8 @@ function sanitize(message: string): string {
     .slice(0, MAX_ERROR_LEN)
 }
 
-async function fetchUsage(t: Strings): Promise<UsageResult> {
-  const key = readGoApiKey()
+async function fetchUsage(client: PluginClient, t: Strings): Promise<UsageResult> {
+  const key = await readGoApiKey(client)
   if (!key) {
     return { ok: false, error: t.noKey }
   }
@@ -245,12 +241,12 @@ const ROWS: Array<(usage: Usage) => Row> = [
 // El estado de colapso es la fuente del recurso: mientras el widget está
 // colapsado no se hace ninguna petición y al expandirlo se refresca de
 // inmediato (cambio de fuente).
-function useUsage(t: () => Strings, collapsed: { value: boolean }): Resource<UsageResult> {
+function useUsage(client: PluginClient, t: () => Strings, collapsed: { value: boolean }): Resource<UsageResult> {
   const [usage, { refetch }] = createResource(
     () => (collapsed.value ? "collapsed" : "visible"),
     async (state: string) => {
       if (state === "collapsed") return { ok: false as const, error: "" }
-      return fetchUsage(t())
+      return fetchUsage(client, t())
     },
   )
   const timer = setInterval(() => {
@@ -269,7 +265,7 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
   const context = usePlugin()
   const theme = () => context.theme
   const t = useStrings()
-  const usage = useUsage(t, props.collapsed)
+  const usage = useUsage(context.client, t, props.collapsed)
 
   const rows = createMemo(() => {
     const value = usage()

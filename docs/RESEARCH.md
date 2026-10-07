@@ -29,6 +29,12 @@ del console.
   Ambas cuentas comparten la misma API key.
 - Source del release clonado en `/tmp/opencode-src` (tag `v1.18.30`).
 
+**Actualización v2 (2.0.24):** `account.json` ya no existe. Los credenciales
+viven en el servicio y se exponen por `GET /api/credential` como
+`{ integrationID: "opencode-go", active: true, value: { type: "key", key: "oc_sk_…" } }`.
+El plugin los lee con `context.client.credential.list()` (el cliente del host),
+lo que además funciona contra servidores remotos. La API existe desde v2.0.20.
+
 ### Feature: OpenCode Go + Zen balance
 
 - **Go** = suscripción $10/mes con límites de uso (`rolling`, semanal,
@@ -104,7 +110,8 @@ descartó) o que opencode publique el dato.
 
 `src/opencode-go-usage.tsx`:
 
-1. `readGoApiKey()` → lee `account.json`, cuenta `serviceID === "opencode-go"`.
+1. `readGoApiKey(client)` → `client.credential.list()` (API v2) y busca la
+   cuenta `integrationID === "opencode-go"` con `value.type === "key"`.
 2. `fetchUsage(signal)` → `GET /zen/go/v1/usage` con Bearer. Normaliza a
    `{ ok: true, usage } | { ok: false, error }`. Nunca loguea la key.
 3. `useUsage(api)` → `createResource` + `setInterval(REFRESH_MS)` (refetch),
