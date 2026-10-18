@@ -104,7 +104,9 @@ descartó) o que opencode publique el dato.
 
 `src/opencode-go-usage.tsx`:
 
-1. `readGoApiKey()` → lee `account.json`, cuenta `serviceID === "opencode-go"`.
+1. `readGoApiKey(client)` → `context.client.credential.list()` (API del host,
+   `GET /api/credential`, incluye el valor del secreto) → entrada activa de
+   `opencode-go` con `value.type === "key"`. Fallback: `account.json` (legacy).
 2. `fetchUsage(signal)` → `GET /zen/go/v1/usage` con Bearer. Normaliza a
    `{ ok: true, usage } | { ok: false, error }`. Nunca loguea la key.
 3. `useUsage(api)` → `createResource` + `setInterval(REFRESH_MS)` (refetch),

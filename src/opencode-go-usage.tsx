@@ -38,6 +38,7 @@ type Strings = {
   unavailable: string
   noData: string
   noKey: string
+  keyExpired: string
   offline: string
   timeout: string
   unexpected: string
@@ -55,6 +56,7 @@ const STRINGS: Record<Language, Strings> = {
     unavailable: "uso no disponible",
     noData: "sin datos",
     noKey: "opencode-go no disponible",
+    keyExpired: "API key vencida — renovar en opencode.ai/console",
     offline: "sin conexión",
     timeout: "tiempo de espera agotado",
     unexpected: "respuesta inesperada",
@@ -70,6 +72,7 @@ const STRINGS: Record<Language, Strings> = {
     unavailable: "usage unavailable",
     noData: "no data",
     noKey: "opencode-go unavailable",
+    keyExpired: "API key expired — renew at opencode.ai/console",
     offline: "no connection",
     timeout: "request timed out",
     unexpected: "unexpected response",
@@ -150,11 +153,42 @@ type Usage = {
 
 type UsageResult = { ok: true; usage: Usage } | { ok: false; error: string }
 
+// El host expone GET /api/credential ("every stored integration credential,
+// including its secret value") vía context.client. Es la fuente autoritativa:
+// refleja la key activa al instante, sin depender de archivos legacy.
+//
+// Se tipa estructural y opcional para no acoplarse a una versión concreta del
+// client: en hosts viejos `credential.list` no existe y se cae al fallback.
+type CredentialClient = {
+  credential?: { list?: () => Promise<unknown> }
+}
+
+type CredentialEntryLike = {
+  integrationID?: string
+  active?: boolean
+  value?: { type?: string; key?: string }
+}
+
+async function readGoApiKey(client: CredentialClient | undefined): Promise<string | undefined> {
+  try {
+    const entries = (await client?.credential?.list?.()) as CredentialEntryLike[] | undefined
+    const active = entries?.find(
+      (entry) => entry.integrationID === "opencode-go" && entry.active && entry.value?.type === "key",
+    )
+    if (active?.value?.key) return active.value.key
+  } catch {
+    // sin host API disponible: probar el fallback legacy
+  }
+  return readLegacyGoApiKey()
+}
+
+// Fallback: ~/.local/share/opencode/account.json. opencode ya no lo mantiene al
+// rotar la key (quedó obsoleto), así que solo cubre hosts sin credential.list.
 function accountFile(): string {
   return path.join(os.homedir(), ".local", "share", "opencode", "account.json")
 }
 
-function readGoApiKey(): string | undefined {
+function readLegacyGoApiKey(): string | undefined {
   try {
     const raw = JSON.parse(fs.readFileSync(accountFile(), "utf8")) as {
       accounts?: Record<string, { serviceID?: string; credential?: { type?: string; key?: string } }>
@@ -182,8 +216,8 @@ function sanitize(message: string): string {
     .slice(0, MAX_ERROR_LEN)
 }
 
-async function fetchUsage(t: Strings): Promise<UsageResult> {
-  const key = readGoApiKey()
+async function fetchUsage(t: Strings, client: CredentialClient | undefined): Promise<UsageResult> {
+  const key = await readGoApiKey(client)
   if (!key) {
     return { ok: false, error: t.noKey }
   }
@@ -205,8 +239,13 @@ async function fetchUsage(t: Strings): Promise<UsageResult> {
   } finally {
     clearTimeout(timer)
   }
-  const json = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
+  const json = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null
   if (!res.ok) {
+    // Key vencida/rotada: el mensaje del servidor es largo y no dice dónde
+    // renovarla, así que se reemplaza por uno corto y localizado.
+    if (json?.error?.code === "api_key_expired") {
+      return { ok: false, error: t.keyExpired }
+    }
     const message = sanitize(json?.error?.message ?? "")
     return { ok: false, error: `HTTP ${res.status}${message ? ` ${message}` : ""}` }
   }
@@ -245,12 +284,12 @@ const ROWS: Array<(usage: Usage) => Row> = [
 // El estado de colapso es la fuente del recurso: mientras el widget está
 // colapsado no se hace ninguna petición y al expandirlo se refresca de
 // inmediato (cambio de fuente).
-function useUsage(t: () => Strings, collapsed: { value: boolean }): Resource<UsageResult> {
+function useUsage(t: () => Strings, collapsed: { value: boolean }, client: CredentialClient | undefined): Resource<UsageResult> {
   const [usage, { refetch }] = createResource(
     () => (collapsed.value ? "collapsed" : "visible"),
     async (state: string) => {
       if (state === "collapsed") return { ok: false as const, error: "" }
-      return fetchUsage(t())
+      return fetchUsage(t(), client)
     },
   )
   const timer = setInterval(() => {
@@ -269,7 +308,7 @@ function UsageView(props: { sessionID: string; collapsed: { value: boolean } }) 
   const context = usePlugin()
   const theme = () => context.theme
   const t = useStrings()
-  const usage = useUsage(t, props.collapsed)
+  const usage = useUsage(t, props.collapsed, context.client)
 
   const rows = createMemo(() => {
     const value = usage()
